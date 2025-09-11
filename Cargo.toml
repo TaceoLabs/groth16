@@ -1,0 +1,15 @@
+[package]
+name = "groth16"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ark-ec = "0.5.0"
+ark-ff = "0.5.0"
+ark-groth16 = "0.5.0"
+ark-poly = "0.5.0"
+ark-relations = "0.5.0"
+num-traits = { version = "0.2.18", default-features = false }
+rayon = "1.8.1"
+tracing = { version = "0.1.40" }
+eyre = "0.6"
