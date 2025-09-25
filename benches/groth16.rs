@@ -80,28 +80,95 @@ fn groth16_prove_bench<P: Pairing>(
         "{bench_name} - {num_constraints} constraints - {num_variables} variables"
     ));
     let (r, s) = (P::ScalarField::rand(rng), P::ScalarField::rand(rng));
-    group.bench_function("ark-groth16", |b| {
+
+    let proof =
+        Groth16::<P, ark_circom::CircomReduction>::create_proof_with_reduction_and_matrices(
+            &pk,
+            r,
+            s,
+            &matrices,
+            matrices.num_instance_variables,
+            matrices.num_constraints,
+            &full_assignment,
+        )
+        .unwrap();
+    let proof2 = groth16::Groth16::<P>::prove::<groth16::CircomReduction>(
+        &pk,
+        r,
+        s,
+        &matrices,
+        &full_assignment,
+    )
+    .unwrap();
+    assert_eq!(proof, proof2);
+    let proof = Groth16::<P>::create_proof_with_reduction_and_matrices(
+        &pk,
+        r,
+        s,
+        &matrices,
+        matrices.num_instance_variables,
+        matrices.num_constraints,
+        &full_assignment,
+    )
+    .unwrap();
+    let proof2 = groth16::Groth16::<P>::prove::<groth16::LibSnarkReduction>(
+        &pk,
+        r,
+        s,
+        &matrices,
+        &full_assignment,
+    )
+    .unwrap();
+    assert_eq!(proof, proof2);
+
+    group.bench_function("ark-groth16/CircomReduction", |b| {
         b.iter(|| {
             let _ = Groth16::<P, ark_circom::CircomReduction>::create_proof_with_reduction_and_matrices(
                 &pk,
                 r,
                 s,
                 &matrices,
-                circuit.num_variables,
-                circuit.num_constraints,
+                matrices.num_instance_variables,
+                matrices.num_constraints,
                 &full_assignment,
             )
             .unwrap();
         })
     });
-    group.bench_function("this-groth16", |b| {
+    group.bench_function("ark-groth16/LibSnarkReduction", |b| {
+        b.iter(|| {
+            let _ = Groth16::<P>::create_proof_with_reduction_and_matrices(
+                &pk,
+                r,
+                s,
+                &matrices,
+                matrices.num_instance_variables,
+                matrices.num_constraints,
+                &full_assignment,
+            )
+            .unwrap();
+        })
+    });
+    group.bench_function("this-groth16/CircomReduction", |b| {
         b.iter(|| {
             let _ = groth16::Groth16::<P>::prove::<groth16::CircomReduction>(
                 &pk,
                 r,
                 s,
                 &matrices,
-                &full_assignment[..],
+                &full_assignment,
+            )
+            .unwrap();
+        })
+    });
+    group.bench_function("this-groth16/LibSnarkReduction", |b| {
+        b.iter(|| {
+            let _ = groth16::Groth16::<P>::prove::<groth16::LibSnarkReduction>(
+                &pk,
+                r,
+                s,
+                &matrices,
+                &full_assignment,
             )
             .unwrap();
         })
