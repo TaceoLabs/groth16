@@ -93,9 +93,7 @@ impl<P: Pairing> Groth16<P> {
         witness: &[P::ScalarField],
     ) -> eyre::Result<Proof<P>> {
         let witness_len = witness.len();
-        // we set the num_instance_variables in the matrices to n_var in the circom-types crate, so the witness should have this many vars
-        // this is not the same as in ark-circom which sets it to n_var - n_public, which is kinda weird because its the constant 1 + the private witness entries but without the public inputs
-        let witness_should_len = matrices.num_witness_variables;
+        let witness_should_len = matrices.num_witness_variables + matrices.num_instance_variables;
         if witness_len != witness_should_len {
             eyre::bail!("expected witness len {witness_should_len}, got len {witness_len}",)
         }

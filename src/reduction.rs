@@ -67,7 +67,12 @@ impl R1CSToQAP for CircomReduction {
             || {
                 let eval_constraint_span_a =
                     tracing::debug_span!("evaluate constraints - a").entered();
-                let mut result = evaluate_constraint::<P>(domain_size, &matrices.a, witness);
+                let mut result = evaluate_constraint::<P>(
+                    domain_size,
+                    &matrices.a,
+                    matrices.num_constraints,
+                    witness,
+                );
                 result[num_constraints..num_constraints + num_inputs]
                     .clone_from_slice(&witness[..num_inputs]);
                 eval_constraint_span_a.exit();
@@ -76,7 +81,12 @@ impl R1CSToQAP for CircomReduction {
             || {
                 let eval_constraint_span_b =
                     tracing::debug_span!("evaluate constraints - b").entered();
-                let result = evaluate_constraint::<P>(domain_size, &matrices.b, witness);
+                let result = evaluate_constraint::<P>(
+                    domain_size,
+                    &matrices.b,
+                    matrices.num_constraints,
+                    witness,
+                );
                 eval_constraint_span_b.exit();
                 result
             }
@@ -158,11 +168,13 @@ impl R1CSToQAP for CircomReduction {
 fn evaluate_constraint<P: Pairing>(
     domain_size: usize,
     matrix: &Matrix<P::ScalarField>,
+    num_constraints: usize,
     witness: &[P::ScalarField],
 ) -> Vec<P::ScalarField> {
     let mut result = matrix
         .par_iter()
         .with_min_len(256)
+        .take(num_constraints)
         .map(|lhs| {
             let mut acc = P::ScalarField::default();
             for (coeff, index) in lhs {
@@ -200,13 +212,25 @@ impl R1CSToQAP for LibSnarkReduction {
             || {
                 let (a, b) = rayon::join(
                     || {
-                        let mut a = evaluate_constraint::<P>(domain_size, &matrices.a, witness);
+                        let mut a = evaluate_constraint::<P>(
+                            domain_size,
+                            &matrices.a,
+                            matrices.num_constraints,
+                            witness,
+                        );
+                        a[num_constraints..num_constraints + num_inputs]
+                            .clone_from_slice(&witness[..num_inputs]);
                         domain.ifft_in_place(&mut a);
                         coset_domain.fft_in_place(&mut a);
                         a
                     },
                     || {
-                        let mut b = evaluate_constraint::<P>(domain_size, &matrices.b, witness);
+                        let mut b = evaluate_constraint::<P>(
+                            domain_size,
+                            &matrices.b,
+                            matrices.num_constraints,
+                            witness,
+                        );
                         domain.ifft_in_place(&mut b);
                         coset_domain.fft_in_place(&mut b);
                         b
@@ -218,7 +242,12 @@ impl R1CSToQAP for LibSnarkReduction {
                     .collect::<Vec<_>>()
             },
             || {
-                let mut c = evaluate_constraint::<P>(domain_size, &matrices.c, witness);
+                let mut c = evaluate_constraint::<P>(
+                    domain_size,
+                    &matrices.c,
+                    matrices.num_constraints,
+                    witness,
+                );
                 domain.ifft_in_place(&mut c);
                 coset_domain.fft_in_place(&mut c);
                 c
