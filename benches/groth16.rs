@@ -2,18 +2,18 @@ use ark_ec::pairing::Pairing;
 use ark_ff::{PrimeField, UniformRand};
 use ark_groth16::Groth16;
 use ark_relations::{
-    lc,
-    r1cs::{
+    gr1cs::{
         ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, OptimizationGoal,
         SynthesisError,
     },
+    lc,
 };
 use ark_snark::SNARK;
 use ark_std::rand::SeedableRng;
 use criterion::{Criterion, criterion_group, criterion_main};
 
-const NUM_CONSTRAINTS: usize = (1 << 16) - 100;
-const NUM_VARIABLES: usize = (1 << 16) - 100;
+const NUM_CONSTRAINTS: usize = (1 << 20) - 100;
+const NUM_VARIABLES: usize = (1 << 20) - 100;
 
 #[derive(Copy, Clone)]
 struct DummyCircuit<F: PrimeField> {
@@ -39,10 +39,10 @@ impl<F: PrimeField> ConstraintSynthesizer<F> for DummyCircuit<F> {
         }
 
         for _ in 0..self.num_constraints - 1 {
-            cs.enforce_constraint(lc!() + a, lc!() + b, lc!() + c)?;
+            cs.enforce_r1cs_constraint(|| lc!() + a, || lc!() + b, || lc!() + c)?;
         }
 
-        cs.enforce_constraint(lc!(), lc!(), lc!())?;
+        cs.enforce_r1cs_constraint(|| lc!(), || lc!(), || lc!())?;
 
         Ok(())
     }
@@ -68,13 +68,17 @@ fn groth16_prove_bench<P: Pairing>(
     circuit.generate_constraints(cs.clone()).unwrap();
     assert!(cs.is_satisfied().unwrap());
     cs.finalize();
-    let matrices = cs.to_matrices().unwrap();
+    let mut matrices = cs.to_matrices().unwrap();
+    let matrices = matrices.remove("R1CS").unwrap();
     let prover = cs.borrow().unwrap();
     let full_assignment = [
-        prover.instance_assignment.as_slice(),
-        prover.witness_assignment.as_slice(),
+        prover.instance_assignment().unwrap(),
+        prover.witness_assignment().unwrap(),
     ]
     .concat();
+    let num_instance_variables = prover.num_instance_variables;
+    let num_witness_variables = prover.num_witness_variables;
+    let num_constraints = prover.num_constraints();
 
     let mut group = c.benchmark_group(format!(
         "{bench_name} - {num_constraints} constraints - {num_variables} variables"
@@ -87,8 +91,8 @@ fn groth16_prove_bench<P: Pairing>(
             r,
             s,
             &matrices,
-            matrices.num_instance_variables,
-            matrices.num_constraints,
+            num_instance_variables,
+            num_constraints,
             &full_assignment,
         )
         .unwrap();
@@ -97,6 +101,9 @@ fn groth16_prove_bench<P: Pairing>(
         r,
         s,
         &matrices,
+        num_instance_variables,
+        num_witness_variables,
+        num_constraints,
         &full_assignment,
     )
     .unwrap();
@@ -106,8 +113,8 @@ fn groth16_prove_bench<P: Pairing>(
         r,
         s,
         &matrices,
-        matrices.num_instance_variables,
-        matrices.num_constraints,
+        num_instance_variables,
+        num_constraints,
         &full_assignment,
     )
     .unwrap();
@@ -116,6 +123,9 @@ fn groth16_prove_bench<P: Pairing>(
         r,
         s,
         &matrices,
+        num_instance_variables,
+        num_witness_variables,
+        num_constraints,
         &full_assignment,
     )
     .unwrap();
@@ -128,8 +138,8 @@ fn groth16_prove_bench<P: Pairing>(
                 r,
                 s,
                 &matrices,
-                matrices.num_instance_variables,
-                matrices.num_constraints,
+                num_instance_variables,
+                num_constraints,
                 &full_assignment,
             )
             .unwrap();
@@ -142,8 +152,8 @@ fn groth16_prove_bench<P: Pairing>(
                 r,
                 s,
                 &matrices,
-                matrices.num_instance_variables,
-                matrices.num_constraints,
+                num_instance_variables,
+                num_constraints,
                 &full_assignment,
             )
             .unwrap();
@@ -156,6 +166,9 @@ fn groth16_prove_bench<P: Pairing>(
                 r,
                 s,
                 &matrices,
+                num_instance_variables,
+                num_witness_variables,
+                num_constraints,
                 &full_assignment,
             )
             .unwrap();
@@ -168,6 +181,9 @@ fn groth16_prove_bench<P: Pairing>(
                 r,
                 s,
                 &matrices,
+                num_instance_variables,
+                num_witness_variables,
+                num_constraints,
                 &full_assignment,
             )
             .unwrap();

@@ -1,7 +1,7 @@
 use ark_ec::pairing::Pairing;
 use ark_ff::{FftField, Field, One};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
-use ark_relations::r1cs::{ConstraintMatrices, Matrix};
+use ark_relations::gr1cs::Matrix;
 use rayon::iter::{
     IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
 };
@@ -21,7 +21,9 @@ macro_rules! rayon_join {
 pub trait R1CSToQAP {
     /// Computes a QAP witness corresponding to the R1CS witness, using the provided `ConstraintMatrices`.
     fn witness_map_from_matrices<P: Pairing>(
-        matrices: &ConstraintMatrices<P::ScalarField>,
+        matrices: &[Matrix<P::ScalarField>],
+        num_constraints: usize,
+        num_inputs: usize,
         witness: &[P::ScalarField],
     ) -> eyre::Result<Vec<P::ScalarField>>;
 }
@@ -38,11 +40,11 @@ pub struct CircomReduction;
 impl R1CSToQAP for CircomReduction {
     #[instrument(level = "debug", name = "witness map from matrices", skip_all)]
     fn witness_map_from_matrices<P: Pairing>(
-        matrices: &ConstraintMatrices<P::ScalarField>,
+        matrices: &[Matrix<P::ScalarField>],
+        num_constraints: usize,
+        num_inputs: usize,
         witness: &[P::ScalarField],
     ) -> eyre::Result<Vec<P::ScalarField>> {
-        let num_constraints = matrices.num_constraints;
-        let num_inputs = matrices.num_instance_variables;
         let mut domain =
             GeneralEvaluationDomain::<P::ScalarField>::new(num_constraints + num_inputs)
                 .ok_or(eyre::eyre!("Polynomial Degree too large"))?;
@@ -67,12 +69,8 @@ impl R1CSToQAP for CircomReduction {
             || {
                 let eval_constraint_span_a =
                     tracing::debug_span!("evaluate constraints - a").entered();
-                let mut result = evaluate_constraint::<P>(
-                    domain_size,
-                    &matrices.a,
-                    matrices.num_constraints,
-                    witness,
-                );
+                let mut result =
+                    evaluate_constraint::<P>(domain_size, &matrices[0], num_constraints, witness);
                 result[num_constraints..num_constraints + num_inputs]
                     .clone_from_slice(&witness[..num_inputs]);
                 eval_constraint_span_a.exit();
@@ -81,12 +79,8 @@ impl R1CSToQAP for CircomReduction {
             || {
                 let eval_constraint_span_b =
                     tracing::debug_span!("evaluate constraints - b").entered();
-                let result = evaluate_constraint::<P>(
-                    domain_size,
-                    &matrices.b,
-                    matrices.num_constraints,
-                    witness,
-                );
+                let result =
+                    evaluate_constraint::<P>(domain_size, &matrices[1], num_constraints, witness);
                 eval_constraint_span_b.exit();
                 result
             }
@@ -197,11 +191,11 @@ pub struct LibSnarkReduction;
 impl R1CSToQAP for LibSnarkReduction {
     #[instrument(level = "debug", name = "witness map from matrices", skip_all)]
     fn witness_map_from_matrices<P: Pairing>(
-        matrices: &ConstraintMatrices<P::ScalarField>,
+        matrices: &[Matrix<P::ScalarField>],
+        num_constraints: usize,
+        num_inputs: usize,
         witness: &[P::ScalarField],
     ) -> eyre::Result<Vec<P::ScalarField>> {
-        let num_constraints = matrices.num_constraints;
-        let num_inputs = matrices.num_instance_variables;
         let domain = GeneralEvaluationDomain::<P::ScalarField>::new(num_constraints + num_inputs)
             .ok_or(eyre::eyre!("Polynomial Degree too large"))?;
         let domain_size = domain.size();
@@ -214,8 +208,8 @@ impl R1CSToQAP for LibSnarkReduction {
                     || {
                         let mut a = evaluate_constraint::<P>(
                             domain_size,
-                            &matrices.a,
-                            matrices.num_constraints,
+                            &matrices[0],
+                            num_constraints,
                             witness,
                         );
                         a[num_constraints..num_constraints + num_inputs]
@@ -227,8 +221,8 @@ impl R1CSToQAP for LibSnarkReduction {
                     || {
                         let mut b = evaluate_constraint::<P>(
                             domain_size,
-                            &matrices.b,
-                            matrices.num_constraints,
+                            &matrices[1],
+                            num_constraints,
                             witness,
                         );
                         domain.ifft_in_place(&mut b);
@@ -242,12 +236,8 @@ impl R1CSToQAP for LibSnarkReduction {
                     .collect::<Vec<_>>()
             },
             || {
-                let mut c = evaluate_constraint::<P>(
-                    domain_size,
-                    &matrices.c,
-                    matrices.num_constraints,
-                    witness,
-                );
+                let mut c =
+                    evaluate_constraint::<P>(domain_size, &matrices[2], num_constraints, witness);
                 domain.ifft_in_place(&mut c);
                 coset_domain.fft_in_place(&mut c);
                 c

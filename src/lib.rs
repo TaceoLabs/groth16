@@ -2,12 +2,12 @@ use ark_ec::pairing::Pairing;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{FftField, LegendreSymbol, PrimeField};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
+use ark_relations::gr1cs::Matrix;
 use num_traits::ToPrimitive;
 use std::marker::PhantomData;
 use tracing::instrument;
 
 pub use ark_groth16::{Proof, ProvingKey, VerifyingKey};
-pub use ark_relations::r1cs::ConstraintMatrices;
 pub use reduction::{CircomReduction, LibSnarkReduction, R1CSToQAP};
 
 mod reduction;
@@ -85,27 +85,24 @@ pub struct Groth16<P: Pairing> {
 
 impl<P: Pairing> Groth16<P> {
     #[instrument(level = "debug", name = "Groth16 - Proof", skip_all)]
+    #[allow(clippy::too_many_arguments)]
     pub fn prove<R: R1CSToQAP>(
         pkey: &ProvingKey<P>,
         r: P::ScalarField,
         s: P::ScalarField,
-        matrices: &ConstraintMatrices<P::ScalarField>,
+        matrices: &[Matrix<P::ScalarField>],
+        num_inputs: usize,
+        num_witness_variables: usize,
+        num_constraints: usize,
         witness: &[P::ScalarField],
     ) -> eyre::Result<Proof<P>> {
         let witness_len = witness.len();
-        let witness_should_len = matrices.num_witness_variables + matrices.num_instance_variables;
+        let witness_should_len = num_witness_variables + num_inputs;
         if witness_len != witness_should_len {
             eyre::bail!("expected witness len {witness_should_len}, got len {witness_len}",)
         }
-        let h = R::witness_map_from_matrices::<P>(matrices, witness)?;
-        let proof = Self::create_proof_with_assignment(
-            pkey,
-            r,
-            s,
-            h,
-            witness,
-            matrices.num_instance_variables,
-        )?;
+        let h = R::witness_map_from_matrices::<P>(matrices, num_constraints, num_inputs, witness)?;
+        let proof = Self::create_proof_with_assignment(pkey, r, s, h, witness, num_inputs)?;
         Ok(proof)
     }
 

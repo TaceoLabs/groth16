@@ -25,3 +25,15 @@ ark-circom = "0.5"
 [[bench]]
 name = "groth16"
 harness = false
+
+[patch.crates-io]
+ark-relations = { git = "https://github.com/arkworks-rs/snark.git" }
+ark-ff = { git = "https://github.com/arkworks-rs/algebra.git" }
+ark-ec = { git = "https://github.com/arkworks-rs/algebra.git" }
+ark-poly = { git = "https://github.com/arkworks-rs/algebra.git" }
+ark-serialize = { git = "https://github.com/arkworks-rs/algebra.git" }
+ark-bn254 = { git = "https://github.com/arkworks-rs/algebra.git" }
+ark-snark = { git = "https://github.com/arkworks-rs/snark.git" }
+ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives.git" }
+ark-groth16 = { git = "https://github.com/arkworks-rs/groth16.git" }
+ark-circom = { git = "https://github.com/arkworks-rs/circom-compat.git" }
